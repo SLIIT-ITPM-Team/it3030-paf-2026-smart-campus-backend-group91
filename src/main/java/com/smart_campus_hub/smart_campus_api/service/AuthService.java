@@ -11,6 +11,7 @@ import com.smart_campus_hub.smart_campus_api.exception.ApiException;
 import com.smart_campus_hub.smart_campus_api.repository.RoleRepository;
 import com.smart_campus_hub.smart_campus_api.repository.UserRepository;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
@@ -61,14 +62,18 @@ public class AuthService {
     }
 
     public AuthResponse login(LoginRequest request) {
-        String username = normalize(request.getUsername());
+        String identifier = normalize(request.getUsername());
 
         User user = userRepository
-            .findByUsernameIgnoreCase(username)
-            .orElseThrow(() -> new ApiException(HttpStatus.UNAUTHORIZED, "Invalid username."));
+            .findByUsernameIgnoreCaseOrEmailIgnoreCase(identifier, identifier)
+            .orElseThrow(this::invalidCredentialsException);
 
-        if (!passwordEncoder.matches(request.getPassword(), user.getPasswordHash())) {
-            throw new ApiException(HttpStatus.UNAUTHORIZED, "Wrong password.");
+        if (!user.isEnabled()) {
+            throw new ApiException(HttpStatus.FORBIDDEN, "User account is disabled.");
+        }
+
+        if (!verifyAndUpgradePassword(user, request.getPassword())) {
+            throw invalidCredentialsException();
         }
 
         String accessToken = UUID.randomUUID().toString();
@@ -95,11 +100,13 @@ public class AuthService {
     }
 
     private UserResponse toUserResponse(User user) {
+        String roleName = resolveRoleName(user);
+
         return new UserResponse(
             user.getId(),
             user.getUsername(),
             user.getEmail(),
-            List.of(user.getRole().name())
+            List.of(roleName)
         );
     }
 
@@ -118,5 +125,55 @@ public class AuthService {
                 newRole.setDescription(roleName + " role");
                 return roleRepository.save(newRole).getRoleId();
             });
+    }
+
+    private ApiException invalidCredentialsException() {
+        return new ApiException(HttpStatus.UNAUTHORIZED, "Invalid username or password.");
+    }
+
+    private boolean verifyAndUpgradePassword(User user, String rawPassword) {
+        String storedPassword = user.getPasswordHash();
+
+        if (rawPassword == null || rawPassword.isBlank() || storedPassword == null || storedPassword.isBlank()) {
+            return false;
+        }
+
+        if (looksLikeBcryptHash(storedPassword)) {
+            try {
+                return passwordEncoder.matches(rawPassword, storedPassword);
+            } catch (IllegalArgumentException ex) {
+                return false;
+            }
+        }
+
+        if (!storedPassword.equals(rawPassword)) {
+            return false;
+        }
+
+        // Upgrade legacy plain-text passwords after a successful login.
+        user.setPasswordHash(passwordEncoder.encode(rawPassword));
+        userRepository.save(user);
+        return true;
+    }
+
+    private boolean looksLikeBcryptHash(String value) {
+        return value.startsWith("$2a$") || value.startsWith("$2b$") || value.startsWith("$2y$");
+    }
+
+    private String resolveRoleName(User user) {
+        if (user.getRole() != null) {
+            return user.getRole().name();
+        }
+
+        if (user.getRoleId() != null) {
+            return roleRepository
+                .findById(user.getRoleId())
+                .map(RoleEntity::getRoleName)
+                .filter(name -> !name.isBlank())
+                .map(name -> name.toUpperCase(Locale.ROOT))
+                .orElse(Role.USER.name());
+        }
+
+        return Role.USER.name();
     }
 }
