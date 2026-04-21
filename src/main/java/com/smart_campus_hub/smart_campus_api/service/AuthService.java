@@ -1,6 +1,7 @@
 package com.smart_campus_hub.smart_campus_api.service;
 
 import com.smart_campus_hub.smart_campus_api.dto.auth.AuthResponse;
+import com.smart_campus_hub.smart_campus_api.dto.auth.AdminCreateUserRequest;
 import com.smart_campus_hub.smart_campus_api.dto.auth.LoginRequest;
 import com.smart_campus_hub.smart_campus_api.dto.auth.RegisterRequest;
 import com.smart_campus_hub.smart_campus_api.dto.auth.UserResponse;
@@ -10,6 +11,7 @@ import com.smart_campus_hub.smart_campus_api.entity.User;
 import com.smart_campus_hub.smart_campus_api.exception.ApiException;
 import com.smart_campus_hub.smart_campus_api.repository.RoleRepository;
 import com.smart_campus_hub.smart_campus_api.repository.UserRepository;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -83,16 +85,46 @@ public class AuthService {
     }
 
     public UserResponse getCurrentUser(String accessToken) {
-        Long userId = tokenStore.get(accessToken);
-        if (userId == null) {
-            throw new ApiException(HttpStatus.UNAUTHORIZED, "Invalid or expired token.");
+        User user = getUserByAccessToken(accessToken);
+        return toUserResponse(user);
+    }
+
+    public List<UserResponse> getAllUsersForAdmin(String accessToken) {
+        requireAdmin(accessToken);
+
+        return userRepository
+            .findAll()
+            .stream()
+            .sorted(Comparator.comparing(User::getId))
+            .map(this::toUserResponse)
+            .toList();
+    }
+
+    public UserResponse createUserForAdmin(String accessToken, AdminCreateUserRequest request) {
+        requireAdmin(accessToken);
+
+        String username = normalize(request.getUsername());
+        String email = normalize(request.getEmail()).toLowerCase();
+
+        if (userRepository.existsByUsernameIgnoreCase(username)) {
+            throw new ApiException(HttpStatus.CONFLICT, "Duplicate username.");
         }
 
-        User user = userRepository
-            .findById(userId)
-            .orElseThrow(() -> new ApiException(HttpStatus.UNAUTHORIZED, "Invalid or expired token."));
+        if (userRepository.existsByEmailIgnoreCase(email)) {
+            throw new ApiException(HttpStatus.CONFLICT, "Duplicate email.");
+        }
 
-        return toUserResponse(user);
+        User user = new User();
+        user.setName(username);
+        user.setUsername(username);
+        user.setEmail(email);
+        user.setPasswordHash(passwordEncoder.encode(generateTemporaryPassword()));
+        user.setRole(request.getRole());
+        user.setRoleId(resolveRoleId(request.getRole()));
+        user.setEnabled(true);
+
+        User savedUser = userRepository.save(user);
+        return toUserResponse(savedUser);
     }
 
     public void logout(String accessToken) {
@@ -112,6 +144,26 @@ public class AuthService {
 
     private String normalize(String value) {
         return value == null ? "" : value.trim();
+    }
+
+    private User getUserByAccessToken(String accessToken) {
+        Long userId = tokenStore.get(accessToken);
+        if (userId == null) {
+            throw new ApiException(HttpStatus.UNAUTHORIZED, "Invalid or expired token.");
+        }
+
+        return userRepository
+            .findById(userId)
+            .orElseThrow(() -> new ApiException(HttpStatus.UNAUTHORIZED, "Invalid or expired token."));
+    }
+
+    private User requireAdmin(String accessToken) {
+        User currentUser = getUserByAccessToken(accessToken);
+        if (!Role.ADMIN.name().equals(resolveRoleName(currentUser))) {
+            throw new ApiException(HttpStatus.FORBIDDEN, "Admin access required.");
+        }
+
+        return currentUser;
     }
 
     private Integer resolveRoleId(Role role) {
@@ -158,6 +210,10 @@ public class AuthService {
 
     private boolean looksLikeBcryptHash(String value) {
         return value.startsWith("$2a$") || value.startsWith("$2b$") || value.startsWith("$2y$");
+    }
+
+    private String generateTemporaryPassword() {
+        return "Temp@" + UUID.randomUUID().toString().replace("-", "").substring(0, 8);
     }
 
     private String resolveRoleName(User user) {
