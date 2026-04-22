@@ -1,4 +1,4 @@
-package com.smart_campus_hub.smart_campus_api.controller;
+package com.smart_campus_hub.smart_campus_api.controllers;
 
 import com.smart_campus_hub.smart_campus_api.dto.auth.AuthResponse;
 import com.smart_campus_hub.smart_campus_api.dto.auth.LoginRequest;
@@ -30,7 +30,7 @@ public class AuthController {
     @PostMapping("/register")
     public ResponseEntity<UserResponse> register(@Valid @RequestBody RegisterRequest request) {
         UserResponse created = authService.register(request);
-        return ResponseEntity.status(HttpStatus.CREATED).body(created);
+        return ResponseEntity.ok(created);
     }
 
     @PostMapping("/login")
@@ -76,4 +76,3 @@ public class AuthController {
         return authorization.substring(BEARER_PREFIX.length()).trim();
     }
 }
-
