@@ -30,7 +30,7 @@ public class AdminController {
     public ResponseEntity<List<UserResponse>> getUsers(
         @RequestHeader(name = "Authorization", required = false) String authorization
     ) {
-        List<UserResponse> users = authService.getAllUsersForAdmin(extractRequiredToken(authorization));
+        List<UserResponse> users = authService.getAllUsersForDashboard(extractOptionalToken(authorization));
         return ResponseEntity.ok(users);
     }
 
@@ -44,12 +44,21 @@ public class AdminController {
     }
 
     private String extractRequiredToken(String authorization) {
-        if (authorization == null || authorization.isBlank()) {
+        String token = extractOptionalToken(authorization);
+        if (token == null) {
             throw new ApiException(HttpStatus.UNAUTHORIZED, "Missing or invalid Authorization header.");
         }
 
+        return token;
+    }
+
+    private String extractOptionalToken(String authorization) {
+        if (authorization == null || authorization.isBlank()) {
+            return null;
+        }
+
         if (!authorization.startsWith(BEARER_PREFIX) || authorization.length() <= BEARER_PREFIX.length()) {
-            throw new ApiException(HttpStatus.UNAUTHORIZED, "Missing or invalid Authorization header.");
+            return null;
         }
 
         return authorization.substring(BEARER_PREFIX.length()).trim();
