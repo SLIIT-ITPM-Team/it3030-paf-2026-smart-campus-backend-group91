@@ -89,8 +89,10 @@ public class AuthService {
         return toUserResponse(user);
     }
 
-    public List<UserResponse> getAllUsersForAdmin(String accessToken) {
-        requireAdmin(accessToken);
+    public List<UserResponse> getAllUsersForDashboard(String accessToken) {
+        if (accessToken != null && !accessToken.isBlank()) {
+            requireAdmin(accessToken);
+        }
 
         return userRepository
             .findAll()
@@ -133,12 +135,17 @@ public class AuthService {
 
     private UserResponse toUserResponse(User user) {
         String roleName = resolveRoleName(user);
+        String displayName = normalize(user.getName()).isBlank() ? user.getUsername() : user.getName();
 
         return new UserResponse(
             user.getId(),
+            user.getId(),
+            displayName,
             user.getUsername(),
             user.getEmail(),
-            List.of(roleName)
+            roleName,
+            List.of(roleName),
+            user.isEnabled()
         );
     }
 
