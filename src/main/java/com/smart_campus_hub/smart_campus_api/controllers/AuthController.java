@@ -1,4 +1,4 @@
-package com.smart_campus_hub.smart_campus_api.controller;
+package com.smart_campus_hub.smart_campus_api.controllers;
 
 import com.smart_campus_hub.smart_campus_api.dto.auth.AuthResponse;
 import com.smart_campus_hub.smart_campus_api.dto.auth.LoginRequest;
@@ -76,4 +76,3 @@ public class AuthController {
         return authorization.substring(BEARER_PREFIX.length()).trim();
     }
 }
-
