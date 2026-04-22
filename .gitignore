@@ -36,3 +36,14 @@ build/
 src/main/resources/application.properties
 
 
+# Java / Spring Boot
+target/
+*.log
+
+# Maven
+.mvn/wrapper/maven-wrapper.jar
+
+# Frontend
+coverage/
+
+
