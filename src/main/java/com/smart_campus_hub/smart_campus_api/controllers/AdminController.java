@@ -1,4 +1,4 @@
-package com.smart_campus_hub.smart_campus_api.controller;
+package com.smart_campus_hub.smart_campus_api.controllers;
 
 import com.smart_campus_hub.smart_campus_api.dto.auth.AdminCreateUserRequest;
 import com.smart_campus_hub.smart_campus_api.dto.auth.UserResponse;
