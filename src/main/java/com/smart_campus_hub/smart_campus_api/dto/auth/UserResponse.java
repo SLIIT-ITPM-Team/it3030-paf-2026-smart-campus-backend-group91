@@ -4,8 +4,12 @@ import java.util.List;
 
 public record UserResponse(
     Long id,
+    Long userId,
+    String name,
     String username,
     String email,
-    List<String> roles
+    String role,
+    List<String> roles,
+    boolean enabled
 ) {}
 
