@@ -34,44 +34,43 @@ public class BookingController {
 
     @PostMapping
     public ResponseEntity<BookingResponseDto> createBooking(
-            // Step 1: Validate the incoming request body using @Valid to ensure all required fields are present
             @Valid @RequestBody BookingCreateDto dto,
-            // Step 2: Extract the user ID from the custom headers (defaults to 1 if not provided)
+            
             @RequestHeader(value = "X-User-Id", defaultValue = "1") Long userId,
-            // Step 3: Extract the user's name for record keeping
+            
             @RequestHeader(value = "X-User-Name", defaultValue = "Campus User") String userName,
-            // Step 4: Extract the user's email for sending notifications
+            
             @RequestHeader(value = "X-User-Email", defaultValue = "student@smartcampus.edu") String userEmail) {
         
-        // Step 5: Delegate creation to the service layer and wrap the result in an HTTP 200 OK response
+        
         return ResponseEntity.ok(bookingService.createBooking(dto, userId, userName, userEmail));
     }
 
     @GetMapping("/availability")
     public ResponseEntity<AvailabilityResponseDto> checkAvailability(
-            // Step 1: Get the target resource ID to check
+            
             @RequestParam Long resourceId,
-            // Step 2: Parse the date ensuring it matches the ISO date format (YYYY-MM-DD)
+            
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate bookingDate,
-            // Step 3: Parse the start and end times ensuring they match the ISO time format (HH:MM:SS)
+            
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.TIME) LocalTime startTime,
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.TIME) LocalTime endTime) {
         
-        // Step 4: Call the service to determine if the time slot is free or blocked
+      
         return ResponseEntity.ok(bookingService.checkAvailability(resourceId, bookingDate, startTime, endTime));
     }
 
     @GetMapping("/my")
     public ResponseEntity<List<BookingResponseDto>> getMyBookings(
-            // Step 1: Extract the authenticated user's ID to fetch only their bookings
+            
             @RequestHeader(value = "X-User-Id", defaultValue = "1") Long userId,
-            // Step 2: Optionally filter by the booking status (e.g., PENDING, APPROVED)
+            
             @RequestParam(required = false) BookingStatus status,
-            // Step 3: Optionally filter by a date range
+            
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate fromDate,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate toDate) {
         
-        // Step 4: Retrieve the user's booking history from the service
+        
         return ResponseEntity.ok(bookingService.getMyBookings(userId, status, fromDate, toDate));
     }
 
@@ -115,18 +114,16 @@ public class BookingController {
 
     @PatchMapping("/{id}/cancel")
     public ResponseEntity<BookingResponseDto> cancelBooking(
-            // Step 1: Get the ID of the booking to cancel from the URL path
-            @PathVariable("id") Long id,
-            // Step 2: Extract an optional cancellation reason from the request body
+            
+            @PathVariable("id") Long id, 
             @RequestBody(required = false) BookingCancelDto dto,
-            // Step 3: Identify who is performing the cancellation
             @RequestHeader(value = "X-User-Id", defaultValue = "1") Long userId,
             @RequestHeader(value = "X-User-Role", defaultValue = "USER") String userRole) {
         
-        // Step 4: Ensure the DTO is not null to prevent NullPointerExceptions in the service layer
+        
         BookingCancelDto cancelDto = dto == null ? new BookingCancelDto() : dto;
         
-        // Step 5: Execute the cancellation process and return the updated booking data
+        
         return ResponseEntity.ok(bookingService.cancelBooking(id, cancelDto, userId, userRole));
     }
 
