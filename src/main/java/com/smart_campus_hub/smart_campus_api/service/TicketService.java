@@ -1,6 +1,9 @@
 package com.smart_campus_hub.smart_campus_api.service;
 
-import com.smart_campus_hub.smart_campus_api.dto.*;
+import com.smart_campus_hub.smart_campus_api.dto.Tickets.*;
+import com.smart_campus_hub.smart_campus_api.entity.User;
+import com.smart_campus_hub.smart_campus_api.exception.ResourceNotFoundException;
+import com.smart_campus_hub.smart_campus_api.exception.UnauthorizedException;
 import com.smart_campus_hub.smart_campus_api.model.Attachment;
 import com.smart_campus_hub.smart_campus_api.model.Comment;
 import com.smart_campus_hub.smart_campus_api.model.Ticket;
@@ -8,6 +11,7 @@ import com.smart_campus_hub.smart_campus_api.model.TicketPriority;
 import com.smart_campus_hub.smart_campus_api.model.TicketStatus;
 import com.smart_campus_hub.smart_campus_api.repository.AttachmentRepository;
 import com.smart_campus_hub.smart_campus_api.repository.TicketRepository;
+import com.smart_campus_hub.smart_campus_api.repository.UserRepository;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -30,19 +34,22 @@ public class TicketService {
     @Autowired
     private FileStorageService fileStorageService;
 
+    @Autowired
+    private UserRepository userRepository;
+
     @Transactional
-    public TicketResponseDto createTicket(TicketCreateDto dto, List<MultipartFile> files, Long userId) {
+    public TicketResponse createTicket(TicketCreateRequest req, List<MultipartFile> files, Long userId) {
         if (files != null && files.size() > 3) {
             throw new IllegalArgumentException("Maximum of 3 images can be uploaded per ticket.");
         }
 
         Ticket ticket = Ticket.builder()
-                .resourceId(dto.getResourceId())
+                .resourceId(req.getResourceId())
                 .createdBy(userId)
-                .category(dto.getCategory())
-                .description(dto.getDescription())
-                .priority(dto.getPriority())
-                .contactDetails(dto.getContactDetails())
+                .category(req.getCategory())
+                .description(req.getDescription())
+                .priority(req.getPriority())
+                .contactDetails(req.getContactDetails())
                 .status(TicketStatus.OPEN)
                 .build();
 
@@ -65,10 +72,17 @@ public class TicketService {
         return mapToResponse(ticket);
     }
 
-    public List<TicketResponseDto> getAllTickets(TicketStatus status, TicketPriority priority, String category) {
-        // Not using dynamic Specifications for simplicity, but doing manual filter over lists depending on DB size
-        // If necessary, JPA Specifications should be used. For this module, we filter dynamically.
-        List<Ticket> tickets = ticketRepository.findAll();
+    public List<TicketResponse> getAllTickets(Long userId, String userRole,
+                                              TicketStatus status, TicketPriority priority, String category) {
+        List<Ticket> tickets;
+
+        if ("ADMIN".equalsIgnoreCase(userRole)) {
+            tickets = ticketRepository.findAll();
+        } else if ("TECHNICIAN".equalsIgnoreCase(userRole)) {
+            tickets = ticketRepository.findByAssignedTo(userId);
+        } else {
+            tickets = ticketRepository.findByCreatedBy(userId);
+        }
 
         if (status != null) {
             tickets = tickets.stream().filter(t -> t.getStatus() == status).collect(Collectors.toList());
@@ -77,140 +91,212 @@ public class TicketService {
             tickets = tickets.stream().filter(t -> t.getPriority() == priority).collect(Collectors.toList());
         }
         if (category != null && !category.isEmpty()) {
-            tickets = tickets.stream().filter(t -> t.getCategory().equalsIgnoreCase(category)).collect(Collectors.toList());
+            tickets = tickets.stream().filter(t -> category.equalsIgnoreCase(t.getCategory())).collect(Collectors.toList());
         }
 
         return tickets.stream().map(this::mapToResponse).collect(Collectors.toList());
     }
 
-    public TicketResponseDto getTicket(Long id) {
+    public List<TicketResponse> getMyTickets(Long userId) {
+        return ticketRepository.findByCreatedBy(userId).stream()
+                .map(this::mapToResponse)
+                .collect(Collectors.toList());
+    }
+
+    public TicketResponse getTicket(Long id, Long userId, String userRole) {
         Ticket ticket = ticketRepository.findById(id)
-                .orElseThrow(() -> new IllegalArgumentException("Ticket not found"));
+                .orElseThrow(() -> new ResourceNotFoundException("Ticket not found with id: " + id));
+
+        if ("USER".equalsIgnoreCase(userRole) && !ticket.getCreatedBy().equals(userId)) {
+            throw new UnauthorizedException("You do not have access to this ticket.");
+        }
+
         return mapToResponse(ticket);
     }
 
     @Transactional
-    public TicketResponseDto updateStatus(Long id, TicketStatusUpdateDto dto, String userRole) {
+    public TicketResponse updateStatus(Long id, TicketStatusUpdateRequest req, Long userId, String userRole) {
         if (!"ADMIN".equalsIgnoreCase(userRole) && !"TECHNICIAN".equalsIgnoreCase(userRole)) {
-            throw new org.springframework.security.access.AccessDeniedException("Only authorized users can change status.");
+            throw new UnauthorizedException("Only authorized users can change ticket status.");
         }
 
         Ticket ticket = ticketRepository.findById(id)
-                .orElseThrow(() -> new IllegalArgumentException("Ticket not found"));
+                .orElseThrow(() -> new ResourceNotFoundException("Ticket not found with id: " + id));
 
-        if (dto.getStatus() == TicketStatus.IN_PROGRESS && ticket.getFirstResponseAt() == null) {
-            ticket.setFirstResponseAt(LocalDateTime.now());
+        if ("TECHNICIAN".equalsIgnoreCase(userRole) &&
+                (ticket.getAssignedTo() == null || !ticket.getAssignedTo().equals(userId))) {
+            throw new UnauthorizedException("You can only update tickets assigned to you.");
         }
 
-        if (dto.getStatus() == TicketStatus.RESOLVED && ticket.getStatus() != TicketStatus.RESOLVED) {
-            ticket.setResolvedAt(LocalDateTime.now());
+        if (req.getStatus() == TicketStatus.IN_PROGRESS) {
+            applyFirstResponse(ticket);
         }
 
-        ticket.setStatus(dto.getStatus());
+        if (req.getStatus() == TicketStatus.RESOLVED && ticket.getStatus() != TicketStatus.RESOLVED) {
+            applyResolution(ticket);
+            if (req.getResolutionNotes() != null) {
+                ticket.setResolutionNotes(req.getResolutionNotes());
+            }
+        }
+
+        ticket.setStatus(req.getStatus());
         ticket = ticketRepository.save(ticket);
         return mapToResponse(ticket);
     }
 
     @Transactional
-    public TicketResponseDto assignTicket(Long id, TicketAssignDto dto, String userRole) {
+    public TicketResponse assignTicket(Long id, TicketAssignRequest req, String userRole) {
         if (!"ADMIN".equalsIgnoreCase(userRole)) {
-            throw new org.springframework.security.access.AccessDeniedException("Only admins can assign technicians.");
+            throw new UnauthorizedException("Only admins can assign technicians.");
         }
 
         Ticket ticket = ticketRepository.findById(id)
-                .orElseThrow(() -> new IllegalArgumentException("Ticket not found"));
+                .orElseThrow(() -> new ResourceNotFoundException("Ticket not found with id: " + id));
 
-        ticket.setAssignedTo(dto.getAssignTo());
+        ticket.setAssignedTo(req.getAssignedToId());
+        if (ticket.getStatus() == TicketStatus.OPEN) {
+            ticket.setStatus(TicketStatus.IN_PROGRESS);
+            applyFirstResponse(ticket);
+        }
+
         ticket = ticketRepository.save(ticket);
         return mapToResponse(ticket);
     }
 
     @Transactional
-    public TicketResponseDto rejectTicket(Long id, TicketRejectDto dto, String userRole) {
+    public TicketResponse rejectTicket(Long id, TicketRejectRequest req, String userRole) {
         if (!"ADMIN".equalsIgnoreCase(userRole)) {
-            throw new org.springframework.security.access.AccessDeniedException("Only admins can reject tickets.");
+            throw new UnauthorizedException("Only admins can reject tickets.");
         }
 
         Ticket ticket = ticketRepository.findById(id)
-                .orElseThrow(() -> new IllegalArgumentException("Ticket not found"));
+                .orElseThrow(() -> new ResourceNotFoundException("Ticket not found with id: " + id));
 
         ticket.setStatus(TicketStatus.REJECTED);
-        ticket.setResolutionNotes(dto.getReason());
-        ticket.setResolvedAt(LocalDateTime.now());
+        ticket.setResolutionNotes(req.getReason());
+        applyFirstResponse(ticket);
+        applyResolution(ticket);
         ticket = ticketRepository.save(ticket);
         return mapToResponse(ticket);
     }
 
     @Transactional
-    public TicketResponseDto resolveTicket(Long id, TicketResolveDto dto, String userRole) {
+    public TicketResponse resolveTicket(Long id, TicketResolveRequest req, Long userId, String userRole) {
         if (!"ADMIN".equalsIgnoreCase(userRole) && !"TECHNICIAN".equalsIgnoreCase(userRole)) {
-            throw new org.springframework.security.access.AccessDeniedException("Only authorized users can resolve tickets.");
+            throw new UnauthorizedException("Only authorized users can resolve tickets.");
         }
 
         Ticket ticket = ticketRepository.findById(id)
-                .orElseThrow(() -> new IllegalArgumentException("Ticket not found"));
+                .orElseThrow(() -> new ResourceNotFoundException("Ticket not found with id: " + id));
 
         ticket.setStatus(TicketStatus.RESOLVED);
-        ticket.setResolutionNotes(dto.getResolutionNotes());
-        if (ticket.getResolvedAt() == null) {
-            ticket.setResolvedAt(LocalDateTime.now());
-        }
+        ticket.setResolutionNotes(req.getResolutionNotes());
+        applyResolution(ticket);
         ticket = ticketRepository.save(ticket);
         return mapToResponse(ticket);
     }
 
-    private TicketResponseDto mapToResponse(Ticket ticket) {
-        TicketResponseDto dto = new TicketResponseDto();
-        dto.setId(ticket.getId());
-        dto.setResourceId(ticket.getResourceId());
-        dto.setCreatedBy(ticket.getCreatedBy());
-        dto.setAssignedTo(ticket.getAssignedTo());
-        dto.setCategory(ticket.getCategory());
-        dto.setDescription(ticket.getDescription());
-        dto.setPriority(ticket.getPriority());
-        dto.setStatus(ticket.getStatus());
-        dto.setContactDetails(ticket.getContactDetails());
-        dto.setResolutionNotes(ticket.getResolutionNotes());
-        dto.setCreatedAt(ticket.getCreatedAt());
-        dto.setUpdatedAt(ticket.getUpdatedAt());
-        dto.setFirstResponseAt(ticket.getFirstResponseAt());
-        dto.setResolvedAt(ticket.getResolvedAt());
-
-        // Calculate response time in minutes
-        if (ticket.getFirstResponseAt() != null && ticket.getCreatedAt() != null) {
-            dto.setResponseTimeMinutes(Duration.between(ticket.getCreatedAt(), ticket.getFirstResponseAt()).toMinutes());
+    @Transactional
+    public TicketResponse declineAssignment(Long id, Long userId, String userRole) {
+        if (!"TECHNICIAN".equalsIgnoreCase(userRole)) {
+            throw new UnauthorizedException("Only technicians can decline assignments.");
         }
 
-        // Calculate resolution time in minutes
-        if (ticket.getResolvedAt() != null && ticket.getCreatedAt() != null) {
-            dto.setResolutionTimeMinutes(Duration.between(ticket.getCreatedAt(), ticket.getResolvedAt()).toMinutes());
+        Ticket ticket = ticketRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Ticket not found with id: " + id));
+
+        if (!userId.equals(ticket.getAssignedTo())) {
+            throw new UnauthorizedException("You are not assigned to this ticket.");
         }
 
-        if (ticket.getComments() != null) {
-            dto.setComments(ticket.getComments().stream().map(this::mapCommentToDto).collect(Collectors.toList()));
-        }
-
-        if (ticket.getAttachments() != null) {
-            dto.setAttachments(ticket.getAttachments().stream().map(this::mapAttachmentToDto).collect(Collectors.toList()));
-        }
-
-        return dto;
+        ticket.setAssignedTo(null);
+        ticket.setStatus(TicketStatus.OPEN);
+        ticket = ticketRepository.save(ticket);
+        return mapToResponse(ticket);
     }
 
-    private CommentResponseDto mapCommentToDto(Comment comment) {
-        CommentResponseDto dto = new CommentResponseDto();
-        dto.setId(comment.getId());
-        dto.setUserId(comment.getUserId());
-        dto.setContent(comment.getContent());
-        dto.setCreatedAt(comment.getCreatedAt());
-        return dto;
+    private void applyFirstResponse(Ticket ticket) {
+        if (ticket.getFirstResponseAt() != null) return;
+
+        LocalDateTime now = LocalDateTime.now();
+        ticket.setFirstResponseAt(now);
+
+        long elapsed = Duration.between(ticket.getCreatedAt(), now).toMinutes();
+        ticket.setTimeToFirstResponseMinutes(elapsed);
+
+        SlaPolicy.SlaLimits limits = SlaPolicy.getLimits(ticket.getPriority());
+        ticket.setFirstResponseSlaMet(elapsed <= limits.firstResponseMinutes());
     }
 
-    private AttachmentDto mapAttachmentToDto(Attachment attachment) {
-        AttachmentDto dto = new AttachmentDto();
-        dto.setId(attachment.getId());
-        dto.setFileUrl(attachment.getFileUrl());
-        dto.setUploadedAt(attachment.getUploadedAt());
-        return dto;
+    private void applyResolution(Ticket ticket) {
+        if (ticket.getResolvedAt() != null) return;
+
+        LocalDateTime now = LocalDateTime.now();
+        ticket.setResolvedAt(now);
+
+        long elapsed = Duration.between(ticket.getCreatedAt(), now).toMinutes();
+        ticket.setTimeToResolutionMinutes(elapsed);
+
+        SlaPolicy.SlaLimits limits = SlaPolicy.getLimits(ticket.getPriority());
+        ticket.setResolutionSlaMet(elapsed <= limits.resolutionMinutes());
+    }
+
+    private TicketResponse mapToResponse(Ticket ticket) {
+        String createdByName = userRepository.findById(ticket.getCreatedBy())
+                .map(User::getUsername).orElse("Unknown");
+
+        String assignedToName = ticket.getAssignedTo() == null ? null :
+                userRepository.findById(ticket.getAssignedTo())
+                        .map(User::getUsername).orElse(null);
+
+        SlaPolicy.SlaLimits limits = SlaPolicy.getLimits(ticket.getPriority());
+
+        return TicketResponse.builder()
+                .id(ticket.getId())
+                .resourceId(ticket.getResourceId())
+                .createdBy(ticket.getCreatedBy())
+                .createdByName(createdByName)
+                .assignedTo(ticket.getAssignedTo())
+                .assignedToName(assignedToName)
+                .category(ticket.getCategory())
+                .description(ticket.getDescription())
+                .priority(ticket.getPriority())
+                .status(ticket.getStatus())
+                .contactDetails(ticket.getContactDetails())
+                .resolutionNotes(ticket.getResolutionNotes())
+                .createdAt(ticket.getCreatedAt())
+                .updatedAt(ticket.getUpdatedAt())
+                .firstResponseAt(ticket.getFirstResponseAt())
+                .resolvedAt(ticket.getResolvedAt())
+                .timeToFirstResponseMinutes(ticket.getTimeToFirstResponseMinutes())
+                .timeToResolutionMinutes(ticket.getTimeToResolutionMinutes())
+                .firstResponseSlaMet(ticket.getFirstResponseSlaMet())
+                .resolutionSlaMet(ticket.getResolutionSlaMet())
+                .slaFirstResponseMinutes(limits.firstResponseMinutes())
+                .slaResolutionMinutes(limits.resolutionMinutes())
+                .attachments(ticket.getAttachments() == null ? List.of() :
+                        ticket.getAttachments().stream().map(this::mapAttachment).collect(Collectors.toList()))
+                .comments(ticket.getComments() == null ? List.of() :
+                        ticket.getComments().stream().map(this::mapComment).collect(Collectors.toList()))
+                .build();
+    }
+
+    private AttachmentResponse mapAttachment(Attachment a) {
+        return AttachmentResponse.builder()
+                .id(a.getId())
+                .fileUrl(a.getFileUrl())
+                .uploadedAt(a.getUploadedAt())
+                .build();
+    }
+
+    private CommentResponse mapComment(Comment c) {
+        return CommentResponse.builder()
+                .id(c.getId())
+                .userId(c.getUserId())
+                .userName(c.getUserName())
+                .senderRole(c.getSenderRole())
+                .content(c.getContent())
+                .createdAt(c.getCreatedAt())
+                .build();
     }
 }
