@@ -4,7 +4,10 @@ import com.smart_campus_hub.smart_campus_api.dto.auth.AuthResponse;
 import com.smart_campus_hub.smart_campus_api.dto.auth.LoginRequest;
 import com.smart_campus_hub.smart_campus_api.dto.auth.RegisterRequest;
 import com.smart_campus_hub.smart_campus_api.dto.auth.UserResponse;
+import com.smart_campus_hub.smart_campus_api.entity.Role;
+import com.smart_campus_hub.smart_campus_api.entity.User;
 import com.smart_campus_hub.smart_campus_api.exception.ApiException;
+import com.smart_campus_hub.smart_campus_api.repository.UserRepository;
 import com.smart_campus_hub.smart_campus_api.service.AuthService;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
@@ -16,15 +19,21 @@ import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.util.List;
+import java.util.Map;
+import java.util.stream.Collectors;
+
 @RestController
 @RequestMapping("/api/auth")
 public class AuthController {
     private static final String BEARER_PREFIX = "Bearer ";
 
     private final AuthService authService;
+    private final UserRepository userRepository;
 
-    public AuthController(AuthService authService) {
+    public AuthController(AuthService authService, UserRepository userRepository) {
         this.authService = authService;
+        this.userRepository = userRepository;
     }
 
     @PostMapping("/register")
@@ -53,6 +62,18 @@ public class AuthController {
         }
 
         return ResponseEntity.noContent().build();
+    }
+
+    @GetMapping("/technicians")
+    public ResponseEntity<List<Map<String, Object>>> getTechnicians() {
+        List<Map<String, Object>> technicians = userRepository.findByRole(Role.TECHNICIAN).stream()
+                .map(u -> Map.<String, Object>of(
+                        "id", u.getId(),
+                        "username", u.getUsername(),
+                        "email", u.getEmail()
+                ))
+                .collect(Collectors.toList());
+        return ResponseEntity.ok(technicians);
     }
 
     private String extractRequiredToken(String authorization) {
