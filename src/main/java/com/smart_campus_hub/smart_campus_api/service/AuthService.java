@@ -1,9 +1,10 @@
 package com.smart_campus_hub.smart_campus_api.service;
 
 import com.smart_campus_hub.smart_campus_api.dto.auth.AuthResponse;
-import com.smart_campus_hub.smart_campus_api.dto.auth.AdminCreateUserRequest;
+import com.smart_campus_hub.smart_campus_api.dto.auth.DeleteUserResponse;
 import com.smart_campus_hub.smart_campus_api.dto.auth.LoginRequest;
 import com.smart_campus_hub.smart_campus_api.dto.auth.RegisterRequest;
+import com.smart_campus_hub.smart_campus_api.dto.auth.UpdateUserRoleRequest;
 import com.smart_campus_hub.smart_campus_api.dto.auth.UserResponse;
 import com.smart_campus_hub.smart_campus_api.entity.Role;
 import com.smart_campus_hub.smart_campus_api.entity.RoleEntity;
@@ -11,12 +12,14 @@ import com.smart_campus_hub.smart_campus_api.entity.User;
 import com.smart_campus_hub.smart_campus_api.exception.ApiException;
 import com.smart_campus_hub.smart_campus_api.repository.RoleRepository;
 import com.smart_campus_hub.smart_campus_api.repository.UserRepository;
+import java.util.Arrays;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.stream.Collectors;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
@@ -90,9 +93,7 @@ public class AuthService {
     }
 
     public List<UserResponse> getAllUsersForDashboard(String accessToken) {
-        if (accessToken != null && !accessToken.isBlank()) {
-            requireAdmin(accessToken);
-        }
+        requireAdmin(accessToken);
 
         return userRepository
             .findAll()
@@ -102,31 +103,46 @@ public class AuthService {
             .toList();
     }
 
-    public UserResponse createUserForAdmin(String accessToken, AdminCreateUserRequest request) {
+    public UserResponse updateUserRole(String accessToken, Long targetUserId, UpdateUserRoleRequest request) {
         requireAdmin(accessToken);
 
-        String username = normalize(request.getUsername());
-        String email = normalize(request.getEmail()).toLowerCase();
+        User user = userRepository
+            .findById(targetUserId)
+            .orElseThrow(() -> new ApiException(HttpStatus.NOT_FOUND, "User not found."));
 
-        if (userRepository.existsByUsernameIgnoreCase(username)) {
-            throw new ApiException(HttpStatus.CONFLICT, "Duplicate username.");
+        Role targetRole = parseRole(request.getRole());
+        Role currentRole = resolveRole(user);
+
+        if (currentRole == Role.ADMIN && targetRole != Role.ADMIN && userRepository.countByRole(Role.ADMIN) <= 1) {
+            throw new ApiException(HttpStatus.BAD_REQUEST, "Cannot change role of the last ADMIN user.");
         }
 
-        if (userRepository.existsByEmailIgnoreCase(email)) {
-            throw new ApiException(HttpStatus.CONFLICT, "Duplicate email.");
-        }
-
-        User user = new User();
-        user.setName(username);
-        user.setUsername(username);
-        user.setEmail(email);
-        user.setPasswordHash(passwordEncoder.encode(generateTemporaryPassword()));
-        user.setRole(request.getRole());
-        user.setRoleId(resolveRoleId(request.getRole()));
-        user.setEnabled(true);
+        user.setRole(targetRole);
+        user.setRoleId(resolveRoleId(targetRole));
 
         User savedUser = userRepository.save(user);
         return toUserResponse(savedUser);
+    }
+
+    public DeleteUserResponse deleteUser(String accessToken, Long targetUserId) {
+        User currentAdmin = requireAdmin(accessToken);
+
+        User user = userRepository
+            .findById(targetUserId)
+            .orElseThrow(() -> new ApiException(HttpStatus.NOT_FOUND, "User not found."));
+
+        if (currentAdmin.getId().equals(user.getId())) {
+            throw new ApiException(HttpStatus.BAD_REQUEST, "Admin users cannot delete their own account.");
+        }
+
+        if (resolveRole(user) == Role.ADMIN && userRepository.countByRole(Role.ADMIN) <= 1) {
+            throw new ApiException(HttpStatus.BAD_REQUEST, "Cannot delete the last ADMIN user.");
+        }
+
+        userRepository.delete(user);
+        tokenStore.values().removeIf(userId -> user.getId().equals(userId));
+
+        return new DeleteUserResponse(user.getId(), "User deleted successfully.");
     }
 
     public void logout(String accessToken) {
@@ -219,10 +235,6 @@ public class AuthService {
         return value.startsWith("$2a$") || value.startsWith("$2b$") || value.startsWith("$2y$");
     }
 
-    private String generateTemporaryPassword() {
-        return "Temp@" + UUID.randomUUID().toString().replace("-", "").substring(0, 8);
-    }
-
     private String resolveRoleName(User user) {
         if (user.getRole() != null) {
             return user.getRole().name();
@@ -238,5 +250,34 @@ public class AuthService {
         }
 
         return Role.USER.name();
+    }
+
+    private Role resolveRole(User user) {
+        String roleName = resolveRoleName(user);
+        try {
+            return Role.valueOf(roleName.toUpperCase(Locale.ROOT));
+        } catch (IllegalArgumentException ex) {
+            return Role.USER;
+        }
+    }
+
+    private Role parseRole(String rawRole) {
+        String normalizedRole = normalize(rawRole).toUpperCase(Locale.ROOT);
+        if (normalizedRole.isBlank()) {
+            throw new ApiException(HttpStatus.BAD_REQUEST, "Role is required.");
+        }
+
+        try {
+            return Role.valueOf(normalizedRole);
+        } catch (IllegalArgumentException ex) {
+            throw new ApiException(
+                HttpStatus.BAD_REQUEST,
+                "Invalid role. Allowed roles: " + allowedRoles() + "."
+            );
+        }
+    }
+
+    private String allowedRoles() {
+        return Arrays.stream(Role.values()).map(Role::name).collect(Collectors.joining(", "));
     }
 }
