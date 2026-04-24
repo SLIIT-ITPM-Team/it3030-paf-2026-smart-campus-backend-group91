@@ -92,6 +92,10 @@ public class AuthService {
         return toUserResponse(user);
     }
 
+    public UserResponse getUserById(Long userId) {
+        return userRepository.findById(userId).map(this::toUserResponse).orElse(null);
+    }
+
     public List<UserResponse> getAllUsersForDashboard(String accessToken) {
         requireAdmin(accessToken);
 
