@@ -54,6 +54,18 @@ public class Ticket {
     private LocalDateTime firstResponseAt;
     private LocalDateTime resolvedAt;
 
+    @Column(name = "time_to_first_response_minutes")
+    private Long timeToFirstResponseMinutes;
+
+    @Column(name = "time_to_resolution_minutes")
+    private Long timeToResolutionMinutes;
+
+    @Column(name = "first_response_sla_met")
+    private Boolean firstResponseSlaMet;
+
+    @Column(name = "resolution_sla_met")
+    private Boolean resolutionSlaMet;
+
     @OneToMany(mappedBy = "ticket", cascade = CascadeType.ALL, orphanRemoval = true)
     @Builder.Default
     private List<Comment> comments = new ArrayList<>();

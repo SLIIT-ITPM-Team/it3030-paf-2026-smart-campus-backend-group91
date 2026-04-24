@@ -27,6 +27,12 @@ public class Comment {
 
     private Long userId;
 
+    @Column(name = "user_name")
+    private String userName;
+
+    @Column(name = "sender_role")
+    private String senderRole;
+
     @Column(columnDefinition = "TEXT")
     private String content;
 
