@@ -30,7 +30,6 @@ build/
 !**/src/test/**/build/
 
 ### VS Code ###
-.vscode/
 
 # Local application config
 src/main/resources/application.properties
@@ -47,3 +46,5 @@ target/
 coverage/
 
 
+config.bat
+node_modules

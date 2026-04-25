@@ -42,7 +42,7 @@ public class Resource {
     private String imageContentType;
 
     @ManyToOne
-    @JoinColumn(name = "location_id", nullable = false)
+    @JoinColumn(name = "location_id")
     private Location location;
 
     @OneToMany(mappedBy = "resource", cascade = CascadeType.ALL)
