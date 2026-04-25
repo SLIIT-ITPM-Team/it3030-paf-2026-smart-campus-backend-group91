@@ -8,6 +8,7 @@ import java.util.stream.Collectors;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 
 import com.smart_campus_hub.smart_campus_api.dto.CatalogAvailabilityWindowDto;
@@ -36,6 +37,7 @@ public class CatalogResourceService {
     @Autowired
     private ResourceImageStorageService resourceImageStorageService;
 
+    @Transactional(readOnly = true)
     public List<CatalogResourceResponseDto> getResources(
             String keyword,
             String type,
@@ -56,11 +58,13 @@ public class CatalogResourceService {
                 .collect(Collectors.toList());
     }
 
+    @Transactional(readOnly = true)
     public CatalogResourceResponseDto getResource(Long id) {
         Resource resource = findResource(id);
         return mapToDto(resource);
     }
 
+    @Transactional
     public CatalogResourceResponseDto createResource(CatalogResourceRequestDto dto) {
         Resource resource = new Resource();
         applyCoreFields(resource, dto);
@@ -71,6 +75,7 @@ public class CatalogResourceService {
         return mapToDto(saved);
     }
 
+    @Transactional
     public CatalogResourceResponseDto updateResource(Long id, CatalogResourceRequestDto dto) {
         Resource resource = findResource(id);
         applyCoreFields(resource, dto);
@@ -106,6 +111,7 @@ public class CatalogResourceService {
         return resource.getImageUrl();
     }
 
+    @Transactional
     public void deleteResource(Long id) {
         Resource resource = findResource(id);
         List<AvailabilityWindow> windows = availabilityWindowRepository.findByResource_Id(resource.getId());
