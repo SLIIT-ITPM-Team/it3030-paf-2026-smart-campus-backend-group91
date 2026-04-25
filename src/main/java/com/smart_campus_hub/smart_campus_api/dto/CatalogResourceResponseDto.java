@@ -11,6 +11,7 @@ public class CatalogResourceResponseDto {
     private String type;
     private Integer capacity;
     private String status;
+    private String imageUrl;
     private CatalogLocationDto location;
     private List<CatalogAvailabilityWindowDto> availabilityWindows;
 }
