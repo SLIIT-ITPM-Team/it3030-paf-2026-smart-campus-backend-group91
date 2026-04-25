@@ -1,9 +1,5 @@
 package com.smart_campus_hub.smart_campus_api.service;
 
-import org.springframework.stereotype.Service;
-import org.springframework.util.StringUtils;
-import org.springframework.web.multipart.MultipartFile;
-
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -11,13 +7,17 @@ import java.nio.file.Paths;
 import java.nio.file.StandardCopyOption;
 import java.util.UUID;
 
+import org.springframework.stereotype.Service;
+import org.springframework.util.StringUtils;
+import org.springframework.web.multipart.MultipartFile;
+
 @Service
-public class FileStorageService {
+public class ResourceImageStorageService {
 
     private final Path fileStorageLocation;
 
-    public FileStorageService() {
-        this.fileStorageLocation = Paths.get("uploads/tickets").toAbsolutePath().normalize();
+    public ResourceImageStorageService() {
+        this.fileStorageLocation = Paths.get("uploads/resources").toAbsolutePath().normalize();
         try {
             Files.createDirectories(this.fileStorageLocation);
         } catch (Exception ex) {
@@ -39,7 +39,7 @@ public class FileStorageService {
             }
             Path targetLocation = this.fileStorageLocation.resolve(fileName);
             Files.copy(file.getInputStream(), targetLocation, StandardCopyOption.REPLACE_EXISTING);
-            return "/api/uploads/" + fileName;
+            return "/uploads/resources/" + fileName;
         } catch (IOException ex) {
             throw new RuntimeException("Could not store file " + fileName + ". Please try again!", ex);
         }

@@ -1,6 +1,6 @@
 package com.smart_campus_hub.smart_campus_api.controllers;
 
-import com.smart_campus_hub.smart_campus_api.dto.*;
+import com.smart_campus_hub.smart_campus_api.dto.Tickets.*;
 import com.smart_campus_hub.smart_campus_api.model.TicketPriority;
 import com.smart_campus_hub.smart_campus_api.model.TicketStatus;
 import com.smart_campus_hub.smart_campus_api.service.TicketService;
@@ -21,55 +21,76 @@ public class TicketController {
     private TicketService ticketService;
 
     @PostMapping(consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
-    public ResponseEntity<TicketResponseDto> createTicket(
-            @RequestPart("ticket") @Valid TicketCreateDto dto,
+    public ResponseEntity<TicketResponse> createTicket(
+            @RequestPart("ticket") @Valid TicketCreateRequest req,
             @RequestPart(value = "files", required = false) List<MultipartFile> files,
             @RequestHeader(value = "X-User-Id", defaultValue = "1") Long userId) {
-        return ResponseEntity.ok(ticketService.createTicket(dto, files, userId));
+        return ResponseEntity.ok(ticketService.createTicket(req, files, userId));
+    }
+
+    @GetMapping("/my")
+    public ResponseEntity<List<TicketResponse>> getMyTickets(
+            @RequestHeader(value = "X-User-Id", defaultValue = "1") Long userId) {
+        return ResponseEntity.ok(ticketService.getMyTickets(userId));
     }
 
     @GetMapping
-    public ResponseEntity<List<TicketResponseDto>> getTickets(
+    public ResponseEntity<List<TicketResponse>> getTickets(
+            @RequestHeader(value = "X-User-Id", defaultValue = "1") Long userId,
+            @RequestHeader(value = "X-User-Role", defaultValue = "USER") String userRole,
             @RequestParam(required = false) TicketStatus status,
             @RequestParam(required = false) TicketPriority priority,
             @RequestParam(required = false) String category) {
-        return ResponseEntity.ok(ticketService.getAllTickets(status, priority, category));
+        return ResponseEntity.ok(ticketService.getAllTickets(userId, userRole, status, priority, category));
     }
 
     @GetMapping("/{id}")
-    public ResponseEntity<TicketResponseDto> getTicketById(@PathVariable("id") Long id) {
-        return ResponseEntity.ok(ticketService.getTicket(id));
+    public ResponseEntity<TicketResponse> getTicketById(
+            @PathVariable Long id,
+            @RequestHeader(value = "X-User-Id", defaultValue = "1") Long userId,
+            @RequestHeader(value = "X-User-Role", defaultValue = "USER") String userRole) {
+        return ResponseEntity.ok(ticketService.getTicket(id, userId, userRole));
     }
 
     @PatchMapping("/{id}/status")
-    public ResponseEntity<TicketResponseDto> updateStatus(
-            @PathVariable("id") Long id,
-            @Valid @RequestBody TicketStatusUpdateDto dto,
+    public ResponseEntity<TicketResponse> updateStatus(
+            @PathVariable Long id,
+            @Valid @RequestBody TicketStatusUpdateRequest req,
+            @RequestHeader(value = "X-User-Id", defaultValue = "1") Long userId,
             @RequestHeader(value = "X-User-Role", defaultValue = "USER") String userRole) {
-        return ResponseEntity.ok(ticketService.updateStatus(id, dto, userRole));
+        return ResponseEntity.ok(ticketService.updateStatus(id, req, userId, userRole));
     }
 
     @PatchMapping("/{id}/assign")
-    public ResponseEntity<TicketResponseDto> assignTicket(
-            @PathVariable("id") Long id,
-            @Valid @RequestBody TicketAssignDto dto,
+    public ResponseEntity<TicketResponse> assignTicket(
+            @PathVariable Long id,
+            @Valid @RequestBody TicketAssignRequest req,
             @RequestHeader(value = "X-User-Role", defaultValue = "USER") String userRole) {
-        return ResponseEntity.ok(ticketService.assignTicket(id, dto, userRole));
+        return ResponseEntity.ok(ticketService.assignTicket(id, req, userRole));
     }
 
     @PatchMapping("/{id}/reject")
-    public ResponseEntity<TicketResponseDto> rejectTicket(
-            @PathVariable("id") Long id,
-            @Valid @RequestBody TicketRejectDto dto,
+    public ResponseEntity<TicketResponse> rejectTicket(
+            @PathVariable Long id,
+            @Valid @RequestBody TicketRejectRequest req,
             @RequestHeader(value = "X-User-Role", defaultValue = "USER") String userRole) {
-        return ResponseEntity.ok(ticketService.rejectTicket(id, dto, userRole));
+        return ResponseEntity.ok(ticketService.rejectTicket(id, req, userRole));
     }
 
     @PatchMapping("/{id}/resolve")
-    public ResponseEntity<TicketResponseDto> resolveTicket(
-            @PathVariable("id") Long id,
-            @Valid @RequestBody TicketResolveDto dto,
+    public ResponseEntity<TicketResponse> resolveTicket(
+            @PathVariable Long id,
+            @Valid @RequestBody TicketResolveRequest req,
+            @RequestHeader(value = "X-User-Id", defaultValue = "1") Long userId,
             @RequestHeader(value = "X-User-Role", defaultValue = "USER") String userRole) {
-        return ResponseEntity.ok(ticketService.resolveTicket(id, dto, userRole));
+        return ResponseEntity.ok(ticketService.resolveTicket(id, req, userId, userRole));
+    }
+
+    @PatchMapping("/{id}/decline-assignment")
+    public ResponseEntity<TicketResponse> declineAssignment(
+            @PathVariable Long id,
+            @RequestHeader(value = "X-User-Id", defaultValue = "1") Long userId,
+            @RequestHeader(value = "X-User-Role", defaultValue = "USER") String userRole) {
+        return ResponseEntity.ok(ticketService.declineAssignment(id, userId, userRole));
     }
 }
