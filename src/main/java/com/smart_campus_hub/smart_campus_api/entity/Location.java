@@ -1,8 +1,17 @@
 package com.smart_campus_hub.smart_campus_api.entity;
 
-import jakarta.persistence.*;
-import com.fasterxml.jackson.annotation.JsonIgnore;
 import java.util.List;
+
+import com.fasterxml.jackson.annotation.JsonIgnore;
+
+import jakarta.persistence.CascadeType;
+import jakarta.persistence.Column;
+import jakarta.persistence.Entity;
+import jakarta.persistence.GeneratedValue;
+import jakarta.persistence.GenerationType;
+import jakarta.persistence.Id;
+import jakarta.persistence.OneToMany;
+import jakarta.persistence.Table;
 
 @Entity
 @Table(name = "locations")
@@ -10,11 +19,19 @@ public class Location {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
+    @Column(name = "location_id")
     private Long id;
 
+    @Column(name = "building_name", nullable = false)
     private String buildingName;
+
+    @Column(name = "floor_number")
     private String floorNumber;
+
+    @Column(name = "room_number")
     private String roomNumber;
+
+    @Column(name = "description")
     private String description;
 
     @OneToMany(mappedBy = "location", cascade = CascadeType.ALL)
