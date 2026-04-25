@@ -35,38 +35,57 @@ public class BookingController {
     @PostMapping
     public ResponseEntity<BookingResponseDto> createBooking(
             @Valid @RequestBody BookingCreateDto dto,
+            
             @RequestHeader(value = "X-User-Id", defaultValue = "1") Long userId,
+            
             @RequestHeader(value = "X-User-Name", defaultValue = "Campus User") String userName,
+            
             @RequestHeader(value = "X-User-Email", defaultValue = "student@smartcampus.edu") String userEmail) {
+        
+        
         return ResponseEntity.ok(bookingService.createBooking(dto, userId, userName, userEmail));
     }
 
     @GetMapping("/availability")
     public ResponseEntity<AvailabilityResponseDto> checkAvailability(
+            
             @RequestParam Long resourceId,
+            
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate bookingDate,
+            
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.TIME) LocalTime startTime,
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.TIME) LocalTime endTime) {
+        
+      
         return ResponseEntity.ok(bookingService.checkAvailability(resourceId, bookingDate, startTime, endTime));
     }
 
     @GetMapping("/my")
     public ResponseEntity<List<BookingResponseDto>> getMyBookings(
+            
             @RequestHeader(value = "X-User-Id", defaultValue = "1") Long userId,
+            
             @RequestParam(required = false) BookingStatus status,
+            
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate fromDate,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate toDate) {
+        
+        
         return ResponseEntity.ok(bookingService.getMyBookings(userId, status, fromDate, toDate));
     }
 
     @GetMapping("/admin")
     public ResponseEntity<List<BookingResponseDto>> getAllBookings(
+            // Step 1: Ensure the requester's role is provided to verify authorization in the service
             @RequestHeader(value = "X-User-Role", defaultValue = "USER") String userRole,
+            // Step 2: Capture various optional filter parameters for the admin dashboard
             @RequestParam(required = false) BookingStatus status,
             @RequestParam(required = false) Long resourceId,
             @RequestParam(required = false) Long userId,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate fromDate,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate toDate) {
+        
+        // Step 3: Pass all filters to the service to retrieve the matching system-wide bookings
         return ResponseEntity.ok(bookingService.getAllBookings(status, resourceId, userId, fromDate, toDate, userRole));
     }
 
@@ -95,11 +114,16 @@ public class BookingController {
 
     @PatchMapping("/{id}/cancel")
     public ResponseEntity<BookingResponseDto> cancelBooking(
-            @PathVariable("id") Long id,
+            
+            @PathVariable("id") Long id, 
             @RequestBody(required = false) BookingCancelDto dto,
             @RequestHeader(value = "X-User-Id", defaultValue = "1") Long userId,
             @RequestHeader(value = "X-User-Role", defaultValue = "USER") String userRole) {
+        
+        
         BookingCancelDto cancelDto = dto == null ? new BookingCancelDto() : dto;
+        
+        
         return ResponseEntity.ok(bookingService.cancelBooking(id, cancelDto, userId, userRole));
     }
 
