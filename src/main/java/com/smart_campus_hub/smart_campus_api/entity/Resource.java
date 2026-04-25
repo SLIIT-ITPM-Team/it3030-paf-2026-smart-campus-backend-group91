@@ -32,6 +32,15 @@ public class Resource {
     private Integer capacity;
     private String status;
 
+    @Column(name = "image_url")
+    private String imageUrl;
+
+    @Column(name = "image_data", columnDefinition = "LONGBLOB")
+    private byte[] imageData;
+
+    @Column(name = "image_content_type")
+    private String imageContentType;
+
     @ManyToOne
     @JoinColumn(name = "location_id", nullable = false)
     private Location location;
@@ -52,6 +61,12 @@ public class Resource {
     public void setCapacity(Integer capacity) { this.capacity = capacity; }
     public String getStatus() { return status; }
     public void setStatus(String status) { this.status = status; }
+    public String getImageUrl() { return imageUrl; }
+    public void setImageUrl(String imageUrl) { this.imageUrl = imageUrl; }
+    public byte[] getImageData() { return imageData; }
+    public void setImageData(byte[] imageData) { this.imageData = imageData; }
+    public String getImageContentType() { return imageContentType; }
+    public void setImageContentType(String imageContentType) { this.imageContentType = imageContentType; }
     public Location getLocation() { return location; }
     public void setLocation(Location location) { this.location = location; }
     public List<AvailabilityWindow> getAvailabilityWindows() { return availabilityWindows; }
