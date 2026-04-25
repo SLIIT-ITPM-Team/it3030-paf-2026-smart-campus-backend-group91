@@ -1,9 +1,12 @@
 package com.smart_campus_hub.smart_campus_api.config;
 
 import java.util.List;
+
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
+import org.springframework.security.oauth2.client.registration.ClientRegistrationRepository;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
@@ -19,14 +22,19 @@ public class SecurityConfig {
     }
 
     @Bean
-    public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
+    public SecurityFilterChain securityFilterChain(
+            HttpSecurity http,
+            ObjectProvider<ClientRegistrationRepository> clientRegistrationProvider) throws Exception {
+        boolean hasClientRegistration = clientRegistrationProvider.getIfAvailable() != null;
+
         http
             .cors(cors -> cors.configurationSource(corsConfigurationSource()))
             .csrf(csrf -> csrf.disable())
-            .authorizeHttpRequests(auth -> auth.anyRequest().permitAll())
-            .oauth2Login(oauth2 -> oauth2
-                .successHandler(googleOAuthSuccessHandler)
-            );
+            .authorizeHttpRequests(auth -> auth.anyRequest().permitAll());
+
+        if (hasClientRegistration) {
+            http.oauth2Login(oauth2 -> oauth2.successHandler(googleOAuthSuccessHandler));
+        }
 
         return http.build();
     }

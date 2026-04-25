@@ -1,20 +1,37 @@
 package com.smart_campus_hub.smart_campus_api.repository;
 
-import com.smart_campus_hub.smart_campus_api.model.Booking;
-import com.smart_campus_hub.smart_campus_api.model.BookingStatus;
-import org.springframework.data.jpa.repository.JpaRepository;
-import org.springframework.data.jpa.repository.Query;
-import org.springframework.data.repository.query.Param;
-import org.springframework.stereotype.Repository;
-
 import java.time.LocalDate;
 import java.time.LocalTime;
 import java.util.Collection;
 import java.util.List;
 
+import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
+import org.springframework.stereotype.Repository;
+
+import com.smart_campus_hub.smart_campus_api.model.Booking;
+import com.smart_campus_hub.smart_campus_api.model.BookingStatus;
+
 @Repository
 public interface BookingRepository extends JpaRepository<Booking, Long> {
+        interface TopResourceView {
+                Long getResourceId();
+                String getName();
+                Long getBookingCount();
+        }
+
     List<Booking> findByUserIdOrderByBookingDateAscStartTimeAsc(Long userId);
+
+        long countByBookingDate(LocalDate bookingDate);
+
+        @Query("""
+                        select b.resource.id as resourceId, b.resource.name as name, count(b.id) as bookingCount
+                        from Booking b
+                        group by b.resource.id, b.resource.name
+                        order by bookingCount desc
+                        """)
+        List<TopResourceView> findTopResourcesByBookingCount();
 
     @Query("""
             select b from Booking b
