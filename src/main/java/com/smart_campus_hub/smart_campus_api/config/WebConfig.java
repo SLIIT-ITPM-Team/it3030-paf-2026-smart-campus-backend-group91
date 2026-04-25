@@ -11,5 +11,8 @@ public class WebConfig implements WebMvcConfigurer {
     public void addResourceHandlers(ResourceHandlerRegistry registry) {
         registry.addResourceHandler("/uploads/**")
                 .addResourceLocations("file:uploads/");
+        // legacy path compatibility for records stored with /api/uploads/ prefix
+        registry.addResourceHandler("/api/uploads/**")
+                .addResourceLocations("file:uploads/tickets/");
     }
 }

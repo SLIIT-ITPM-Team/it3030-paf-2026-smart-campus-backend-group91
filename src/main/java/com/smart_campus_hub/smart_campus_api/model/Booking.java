@@ -11,6 +11,7 @@ import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
+import com.smart_campus_hub.smart_campus_api.entity.Resource;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -37,7 +38,7 @@ public class Booking {
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "resource_id", nullable = false)
-    private CampusResource resource;
+    private Resource resource;
 
     @Column(name = "user_id", nullable = false)
     private Long userId;
