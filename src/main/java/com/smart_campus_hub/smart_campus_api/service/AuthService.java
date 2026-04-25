@@ -153,6 +153,39 @@ public class AuthService {
         tokenStore.remove(accessToken);
     }
 
+    public String loginOrRegisterOAuthUser(String email, String name) {
+        String normalizedEmail = email.toLowerCase().trim();
+
+        User user = userRepository
+            .findByUsernameIgnoreCaseOrEmailIgnoreCase(normalizedEmail, normalizedEmail)
+            .orElseGet(() -> {
+                User newUser = new User();
+                newUser.setEmail(normalizedEmail);
+                String username = generateUniqueUsername(normalizedEmail);
+                newUser.setUsername(username);
+                newUser.setName(name != null && !name.isBlank() ? name : username);
+                newUser.setPasswordHash(passwordEncoder.encode(UUID.randomUUID().toString()));
+                newUser.setRole(Role.USER);
+                newUser.setRoleId(resolveRoleId(Role.USER));
+                newUser.setEnabled(true);
+                return userRepository.save(newUser);
+            });
+
+        String token = UUID.randomUUID().toString();
+        tokenStore.put(token, user.getId());
+        return token;
+    }
+
+    private String generateUniqueUsername(String email) {
+        String base = email.split("@")[0].replaceAll("[^a-zA-Z0-9_]", "_");
+        if (!userRepository.existsByUsernameIgnoreCase(base)) return base;
+        for (int i = 1; i < 1000; i++) {
+            String candidate = base + i;
+            if (!userRepository.existsByUsernameIgnoreCase(candidate)) return candidate;
+        }
+        return base + UUID.randomUUID().toString().substring(0, 6);
+    }
+
     private UserResponse toUserResponse(User user) {
         String roleName = resolveRoleName(user);
         String displayName = normalize(user.getName()).isBlank() ? user.getUsername() : user.getName();
