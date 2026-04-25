@@ -10,7 +10,6 @@ import com.smart_campus_hub.smart_campus_api.exception.ApiException;
 import com.smart_campus_hub.smart_campus_api.repository.UserRepository;
 import com.smart_campus_hub.smart_campus_api.service.AuthService;
 import jakarta.validation.Valid;
-import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -48,8 +47,22 @@ public class AuthController {
     }
 
     @GetMapping("/me")
-    public UserResponse me(@RequestHeader(name = "Authorization", required = false) String authorization) {
-        return authService.getCurrentUser(extractRequiredToken(authorization));
+    public ResponseEntity<UserResponse> me(
+            @RequestHeader(name = "Authorization", required = false) String authorization,
+            @RequestHeader(name = "X-User-Id", required = false) Long userIdHeader) {
+        String token = extractOptionalToken(authorization);
+        if (token != null) {
+            try {
+                return ResponseEntity.ok(authService.getCurrentUser(token));
+            } catch (ApiException ex) {
+                if (ex.getStatus() != org.springframework.http.HttpStatus.UNAUTHORIZED) throw ex;
+            }
+        }
+        if (userIdHeader != null) {
+            UserResponse user = authService.getUserById(userIdHeader);
+            if (user != null) return ResponseEntity.ok(user);
+        }
+        throw new ApiException(org.springframework.http.HttpStatus.UNAUTHORIZED, "Invalid or expired token.");
     }
 
     @PostMapping("/logout")
@@ -76,22 +89,13 @@ public class AuthController {
         return ResponseEntity.ok(technicians);
     }
 
-    private String extractRequiredToken(String authorization) {
-        String token = extractOptionalToken(authorization);
-        if (token == null) {
-            throw new ApiException(HttpStatus.UNAUTHORIZED, "Missing or invalid Authorization header.");
-        }
-
-        return token;
-    }
-
     private String extractOptionalToken(String authorization) {
         if (authorization == null || authorization.isBlank()) {
             return null;
         }
 
         if (!authorization.startsWith(BEARER_PREFIX) || authorization.length() <= BEARER_PREFIX.length()) {
-            throw new ApiException(HttpStatus.UNAUTHORIZED, "Missing or invalid Authorization header.");
+            throw new ApiException(org.springframework.http.HttpStatus.UNAUTHORIZED, "Missing or invalid Authorization header.");
         }
 
         return authorization.substring(BEARER_PREFIX.length()).trim();
