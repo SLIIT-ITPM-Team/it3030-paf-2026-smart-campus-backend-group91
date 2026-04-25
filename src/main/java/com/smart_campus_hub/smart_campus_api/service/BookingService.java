@@ -7,13 +7,14 @@ import com.smart_campus_hub.smart_campus_api.dto.BookingRejectDto;
 import com.smart_campus_hub.smart_campus_api.dto.BookingResponseDto;
 import com.smart_campus_hub.smart_campus_api.dto.WaitlistCreateDto;
 import com.smart_campus_hub.smart_campus_api.dto.WaitlistResponseDto;
+import com.smart_campus_hub.smart_campus_api.entity.Location;
+import com.smart_campus_hub.smart_campus_api.entity.Resource;
 import com.smart_campus_hub.smart_campus_api.model.Booking;
 import com.smart_campus_hub.smart_campus_api.model.BookingStatus;
-import com.smart_campus_hub.smart_campus_api.model.CampusResource;
-import com.smart_campus_hub.smart_campus_api.model.ResourceStatus;
 import com.smart_campus_hub.smart_campus_api.model.WaitlistEntry;
 import com.smart_campus_hub.smart_campus_api.model.WaitlistStatus;
 import com.smart_campus_hub.smart_campus_api.repository.BookingRepository;
+import com.smart_campus_hub.smart_campus_api.repository.ResourceRepository;
 import com.smart_campus_hub.smart_campus_api.repository.WaitlistEntryRepository;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
@@ -42,7 +43,7 @@ public class BookingService {
     private WaitlistEntryRepository waitlistEntryRepository;
 
     @Autowired
-    private ResourceService resourceService;
+    private ResourceRepository resourceRepository;
 
     @Autowired
     private EmailNotificationService emailNotificationService;
@@ -50,7 +51,8 @@ public class BookingService {
     @Transactional
     public BookingResponseDto createBooking(BookingCreateDto dto, Long userId, String userName, String userEmail) {
         validateTimeRange(dto.getBookingDate(), dto.getStartTime(), dto.getEndTime());
-        CampusResource resource = resourceService.findResource(dto.getResourceId());
+        Resource resource = resourceRepository.findById(dto.getResourceId())
+                .orElseThrow(() -> new IllegalArgumentException("Resource not found"));
         validateBookableResource(resource, dto.getExpectedAttendees());
 
         if (hasConflict(resource.getId(), dto.getBookingDate(), dto.getStartTime(), dto.getEndTime(), BLOCKING_STATUSES)) {
@@ -81,10 +83,11 @@ public class BookingService {
 
     public AvailabilityResponseDto checkAvailability(Long resourceId, LocalDate bookingDate, LocalTime startTime, LocalTime endTime) {
         validateTimeRange(bookingDate, startTime, endTime);
-        CampusResource resource = resourceService.findResource(resourceId);
+        Resource resource = resourceRepository.findById(resourceId)
+                .orElseThrow(() -> new IllegalArgumentException("Resource not found"));
 
         AvailabilityResponseDto response = new AvailabilityResponseDto();
-        if (resource.getStatus() == ResourceStatus.OUT_OF_SERVICE) {
+        if ("OUT_OF_SERVICE".equalsIgnoreCase(resource.getStatus())) {
             response.setAvailable(false);
             response.setMessage("Resource is out of service.");
             response.setSuggestions(List.of());
@@ -209,8 +212,9 @@ public class BookingService {
     @Transactional
     public WaitlistResponseDto joinWaitlist(WaitlistCreateDto dto, Long userId, String userName, String userEmail) {
         validateTimeRange(dto.getBookingDate(), dto.getStartTime(), dto.getEndTime());
-        CampusResource resource = resourceService.findResource(dto.getResourceId());
-        if (resource.getStatus() == ResourceStatus.OUT_OF_SERVICE) {
+        Resource resource = resourceRepository.findById(dto.getResourceId())
+                .orElseThrow(() -> new IllegalArgumentException("Resource not found"));
+        if ("OUT_OF_SERVICE".equalsIgnoreCase(resource.getStatus())) {
             throw new IllegalArgumentException("Cannot join waitlist for an out of service resource.");
         }
         if (!hasConflict(resource.getId(), dto.getBookingDate(), dto.getStartTime(), dto.getEndTime(), BLOCKING_STATUSES)) {
@@ -404,8 +408,8 @@ public class BookingService {
         return bookingDate.isBefore(today) || (bookingDate.isEqual(today) && startTime.isBefore(LocalTime.now()));
     }
 
-    private void validateBookableResource(CampusResource resource, Integer attendees) {
-        if (resource.getStatus() == ResourceStatus.OUT_OF_SERVICE) {
+    private void validateBookableResource(Resource resource, Integer attendees) {
+        if ("OUT_OF_SERVICE".equalsIgnoreCase(resource.getStatus())) {
             throw new IllegalArgumentException("Resource is out of service and cannot be booked.");
         }
         if (attendees != null && resource.getCapacity() != null && resource.getCapacity() > 0 && attendees > resource.getCapacity()) {
@@ -449,12 +453,27 @@ public class BookingService {
                 + "\nTime: " + booking.getStartTime() + " - " + booking.getEndTime();
     }
 
+    private String formatLocation(Location location) {
+        if (location == null) return null;
+        StringBuilder sb = new StringBuilder();
+        if (location.getBuildingName() != null && !location.getBuildingName().isBlank()) sb.append(location.getBuildingName());
+        if (location.getFloorNumber() != null && !location.getFloorNumber().isBlank()) {
+            if (sb.length() > 0) sb.append(", ");
+            sb.append("Floor ").append(location.getFloorNumber());
+        }
+        if (location.getRoomNumber() != null && !location.getRoomNumber().isBlank()) {
+            if (sb.length() > 0) sb.append(", ");
+            sb.append(location.getRoomNumber());
+        }
+        return sb.length() > 0 ? sb.toString() : null;
+    }
+
     private BookingResponseDto mapBooking(Booking booking) {
         BookingResponseDto dto = new BookingResponseDto();
         dto.setBookingId(booking.getId());
         dto.setResourceId(booking.getResource().getId());
         dto.setResourceName(booking.getResource().getName());
-        dto.setResourceLocation(booking.getResource().getLocation());
+        dto.setResourceLocation(formatLocation(booking.getResource().getLocation()));
         dto.setUserId(booking.getUserId());
         dto.setUserName(booking.getUserName());
         dto.setUserEmail(booking.getUserEmail());
