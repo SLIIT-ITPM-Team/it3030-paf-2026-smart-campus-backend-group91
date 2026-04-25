@@ -8,6 +8,7 @@ import java.util.stream.Collectors;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
+import org.springframework.web.multipart.MultipartFile;
 
 import com.smart_campus_hub.smart_campus_api.dto.CatalogAvailabilityWindowDto;
 import com.smart_campus_hub.smart_campus_api.dto.CatalogLocationDto;
@@ -31,6 +32,9 @@ public class CatalogResourceService {
 
     @Autowired
     private AvailabilityWindowRepository availabilityWindowRepository;
+
+    @Autowired
+    private ResourceImageStorageService resourceImageStorageService;
 
     public List<CatalogResourceResponseDto> getResources(
             String keyword,
@@ -85,6 +89,23 @@ public class CatalogResourceService {
         return mapToDto(resourceRepository.save(resource));
     }
 
+    public CatalogResourceResponseDto updateImage(Long id, MultipartFile file) {
+        Resource resource = findResource(id);
+        try {
+            resource.setImageData(file.getBytes());
+            resource.setImageContentType(file.getContentType());
+            resource.setImageUrl(null);
+        } catch (Exception ex) {
+            throw new RuntimeException("Could not store image", ex);
+        }
+        return mapToDto(resourceRepository.save(resource));
+    }
+
+    public String getImageUrl(Long id) {
+        Resource resource = findResource(id);
+        return resource.getImageUrl();
+    }
+
     public void deleteResource(Long id) {
         Resource resource = findResource(id);
         List<AvailabilityWindow> windows = availabilityWindowRepository.findByResource_Id(resource.getId());
@@ -115,6 +136,9 @@ public class CatalogResourceService {
         }
         if (dto.getStatus() != null) {
             resource.setStatus(dto.getStatus().trim());
+        }
+        if (dto.getImageUrl() != null) {
+            resource.setImageUrl(dto.getImageUrl().trim());
         }
     }
 
@@ -236,6 +260,7 @@ public class CatalogResourceService {
         dto.setType(resource.getType());
         dto.setCapacity(resource.getCapacity());
         dto.setStatus(resource.getStatus());
+        dto.setImageUrl(resource.getImageUrl());
         dto.setLocation(mapLocation(resource.getLocation()));
         dto.setAvailabilityWindows(mapAvailabilityWindows(
                 availabilityWindowRepository.findByResource_Id(resource.getId())));
