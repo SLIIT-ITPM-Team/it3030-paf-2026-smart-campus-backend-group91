@@ -1,7 +1,6 @@
 package com.smart_campus_hub.smart_campus_api.controllers;
 
 import java.util.List;
-import java.util.stream.Collectors;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
@@ -17,8 +16,12 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+import com.smart_campus_hub.smart_campus_api.dto.ResourceResponseDto;
 import com.smart_campus_hub.smart_campus_api.entity.Resource;
+import com.smart_campus_hub.smart_campus_api.model.ResourceStatus;
+import com.smart_campus_hub.smart_campus_api.model.ResourceType;
 import com.smart_campus_hub.smart_campus_api.repository.ResourceRepository;
+import com.smart_campus_hub.smart_campus_api.service.ResourceService;
 
 @RestController
 @RequestMapping("/api/resources")
@@ -28,37 +31,22 @@ public class ResourceController {
     @Autowired
     private ResourceRepository resourceRepository;
 
+    @Autowired
+    private ResourceService resourceService;
+
     // 1. GET ALL & ADVANCED FILTERING (Type, Capacity, Status)
-    @GetMapping
-    public List<Resource> getAllResources(
-            @RequestParam(required = false) String type,
-            @RequestParam(required = false) Integer minCapacity,
-            @RequestParam(required = false) String status) {
-
-        List<Resource> resources = resourceRepository.findAll();
-
-        // Advanced Filtering Logic
-        if (type != null && !type.isEmpty()) {
-            resources = resources.stream()
-                    .filter(resource -> resource.getType() != null
-                            && resource.getType().equalsIgnoreCase(type))
-                    .collect(Collectors.toList());
-        }
-        if (minCapacity != null) {
-            resources = resources.stream()
-                    .filter(resource -> resource.getCapacity() != null
-                            && resource.getCapacity() >= minCapacity)
-                    .collect(Collectors.toList());
-        }
-        if (status != null && !status.isEmpty()) {
-            resources = resources.stream()
-                    .filter(resource -> resource.getStatus() != null
-                            && resource.getStatus().equalsIgnoreCase(status))
-                    .collect(Collectors.toList());
+        @GetMapping
+        public List<ResourceResponseDto> getAllResources(
+            @RequestParam(required = false) String keyword,
+            @RequestParam(required = false) ResourceType type,
+            @RequestParam(required = false) ResourceStatus status) {
+        return resourceService.getResources(keyword, type, status);
         }
 
-        return resources;
-    }
+        @GetMapping("/{id}")
+        public ResourceResponseDto getResource(@PathVariable Long id) {
+        return resourceService.getResource(id);
+        }
 
     // 2. CREATE NEW RESOURCE
     @PostMapping
