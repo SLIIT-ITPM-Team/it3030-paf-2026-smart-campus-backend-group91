@@ -34,8 +34,32 @@ public class ApiExceptionHandler {
 
     @ExceptionHandler(DataIntegrityViolationException.class)
     public ResponseEntity<ErrorResponse> handleDataIntegrity(DataIntegrityViolationException ex) {
-        return ResponseEntity
-            .status(HttpStatus.CONFLICT)
-            .body(new ErrorResponse("Duplicate username or email."));
+        String msg = ex.getMostSpecificCause() != null ? ex.getMostSpecificCause().getMessage() : ex.getMessage();
+        String normalized = msg == null ? "" : msg.toLowerCase();
+
+        if (normalized.contains("fk_bookings_resource") ||
+                (normalized.contains("foreign key") && normalized.contains("resource"))) {
+            return ResponseEntity.status(HttpStatus.CONFLICT)
+                    .body(new ErrorResponse("Selected resource is invalid or unavailable for bookings."));
+        }
+
+        if (normalized.contains("fk_bookings_user") ||
+                (normalized.contains("foreign key") && normalized.contains("user"))) {
+            return ResponseEntity.status(HttpStatus.CONFLICT)
+                    .body(new ErrorResponse("Booking user is invalid. Please sign in again and retry."));
+        }
+        
+        if (normalized.contains("duplicate") || normalized.contains("unique")) {
+            if (normalized.contains("user") || normalized.contains("email") || normalized.contains("username")) {
+                return ResponseEntity.status(HttpStatus.CONFLICT).body(new ErrorResponse("Duplicate username or email."));
+            }
+            return ResponseEntity.status(HttpStatus.CONFLICT).body(new ErrorResponse("A record with this value already exists."));
+        }
+        return ResponseEntity.status(HttpStatus.CONFLICT).body(new ErrorResponse("Database constraint violation."));
+    }
+
+    @ExceptionHandler(IllegalArgumentException.class)
+    public ResponseEntity<ErrorResponse> handleIllegalArgument(IllegalArgumentException ex) {
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(new ErrorResponse(ex.getMessage()));
     }
 }
